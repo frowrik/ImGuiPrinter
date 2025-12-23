@@ -30,3 +30,7 @@
 *.exe
 *.out
 *.app
+build/imgui.ini
+build/example_imgui_printer.pdb
+project
+build/1.pdf
