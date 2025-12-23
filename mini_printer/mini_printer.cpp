@@ -140,38 +140,59 @@ void Printer::PrinterCloseDoc() {
     }
 }
 
+void Printer::PrinterGetPageDesc(PrinterPageDesc& OutDesc) {
+    OutDesc = {};
+    OutDesc.paperSizeW     = GetDeviceCaps( hdcPrinter, PHYSICALWIDTH );
+    OutDesc.paperSizeH     = GetDeviceCaps( hdcPrinter, PHYSICALHEIGHT );
+    OutDesc.printableX     = GetDeviceCaps( hdcPrinter, PHYSICALOFFSETX );
+    OutDesc.printableY     = GetDeviceCaps( hdcPrinter, PHYSICALOFFSETY );
+    OutDesc.printableW     = GetDeviceCaps( hdcPrinter, HORZRES );
+    OutDesc.printableH     = GetDeviceCaps( hdcPrinter, VERTRES );
+    OutDesc.pixelsPerInchW = (float)GetDeviceCaps( hdcPrinter, LOGPIXELSX );
+    OutDesc.pixelsPerInchH = (float)GetDeviceCaps( hdcPrinter, LOGPIXELSY );
+}
+
+void Printer::PrinterSetPagePadding(PrinterPaddingDesc& Desc) {
+    Padding.paddingLeft  = std::max(0.0f, Desc.paddingLeft  ); 
+    Padding.paddingTop   = std::max(0.0f, Desc.paddingTop   ); 
+    Padding.paddingRight = std::max(0.0f, Desc.paddingRight ); 
+    Padding.paddingDown  = std::max(0.0f, Desc.paddingDown  ); 
+}
+
 bool Printer::PrinterDrawPageImage( int width, int height, const BYTE* pixelData, UINT bitsPerPixel ) {
-    if ( !hPrinter || !pPrinterInfo || jobId == 0 || !hdcPrinter ) //
+    //
+    if ( !hPrinter || !pPrinterInfo || jobId == 0 || !hdcPrinter || 
+        width == 0 || height == 0 || pixelData == nullptr || (bitsPerPixel != 24 && bitsPerPixel != 32)
+    ) //
         return false;
 
-    //int paperSize_w = GetDeviceCaps( hdcPrinter, PHYSICALWIDTH );
-    //int paperSize_h = GetDeviceCaps( hdcPrinter, PHYSICALHEIGHT );
-    int printable_x = GetDeviceCaps( hdcPrinter, PHYSICALOFFSETX );
-    int printable_y = GetDeviceCaps( hdcPrinter, PHYSICALOFFSETY );
-    int printable_w = GetDeviceCaps( hdcPrinter, HORZRES );
-    int printable_h = GetDeviceCaps( hdcPrinter, VERTRES );
-    int dpiX        = GetDeviceCaps( hdcPrinter, LOGPIXELSX );
-    int dpiY        = GetDeviceCaps( hdcPrinter, LOGPIXELSY );
+    //
+    PrinterPageDesc PageDesc = {};
+    PrinterGetPageDesc(PageDesc);
 
-    int       Padding_Left  = Paddint_Left_cm  / 2.54 * dpiX;  
-    int       Padding_Right = Paddint_Right_cm / 2.54 * dpiX;  
-    int       Padding_Up    = Paddint_Up_cm    / 2.54 * dpiY; 
-    int       Padding_Down  = Paddint_Down_cm  / 2.54 * dpiY; 
+    //
+    int32_t startX = std::max( 0, (int32_t)Padding.paddingLeft - PageDesc.printableX );
+    int32_t startY = std::max( 0, (int32_t)Padding.paddingTop  - PageDesc.printableY );
 
-    int       startX          = std::max( 0, Padding_Left - printable_x );
-    int       startY          = std::max( 0, Padding_Up - printable_y );
+    //
+    int32_t endX   = std::max( startX, PageDesc.printableX + PageDesc.printableW - (int32_t)Padding.paddingRight );
+    int32_t endY   = std::max( startY, PageDesc.printableY + PageDesc.printableH - (int32_t)Padding.paddingDown  );
 
-    printable_w               -= Padding_Left + Padding_Right;
-    printable_h               -= Padding_Up + Padding_Down;
+    //
+    int32_t finalW = endX - startX;
+    int32_t finalH = endY - startY;
 
-    float finalScale = std::min( (float)printable_w / (float)width, (float)printable_h / (float)height );
+    if (finalW > 0 && finalH > 0) {
+        //
+        StartPage( hdcPrinter );
 
-    int   newW       = (int)( width * finalScale );
-    int   newH       = (int)( height * finalScale );
-    
-    StartPage( hdcPrinter );
+        // scale for push image to full screen
+        float finalScale = std::min( (float)finalW / (float)width, (float)finalH / (float)height );
 
-    {
+        //
+        int32_t ImageDestW = (int32_t)( width * finalScale );
+        int32_t ImageDestH = (int32_t)( height * finalScale );
+
         //
         BITMAPINFO bmi              = { 0 };
         bmi.bmiHeader.biSize        = sizeof( BITMAPINFOHEADER );
@@ -195,15 +216,16 @@ bool Printer::PrinterDrawPageImage( int width, int height, const BYTE* pixelData
         BITMAP  bm;
         GetObjectA( hBitmap, sizeof( bm ), &bm );
         SetStretchBltMode( hdcPrinter, HALFTONE );
-        StretchBlt( hdcPrinter, startX, startY, newW, newH, hMemDC, 0, 0, bm.bmWidth, bm.bmHeight, SRCCOPY );
+        StretchBlt( hdcPrinter, startX, startY, ImageDestW, ImageDestH, hMemDC, 0, 0, bm.bmWidth, bm.bmHeight, SRCCOPY );
         SelectObject( hMemDC, hOldBmp );
         DeleteDC( hMemDC );
 
         //
         DeleteObject( hBitmap );
-    }
 
-    EndPage( hdcPrinter );
+        //
+        EndPage( hdcPrinter );
+    }
 
     return true;
 }

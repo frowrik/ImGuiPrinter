@@ -90,6 +90,17 @@ int main() {
         "example imgui printer", "") )
         return false;
 
+    // create padding options
+    PrinterPageDesc PageDesc;
+    PrintTest.PrinterGetPageDesc(PageDesc);
+
+    PrinterPaddingDesc PaddingOptions;
+    PaddingOptions.paddingLeft  = PageDesc.MillimetersToPixelsW(20);
+    PaddingOptions.paddingTop   = PageDesc.MillimetersToPixelsH(5);
+    PaddingOptions.paddingRight = PageDesc.MillimetersToPixelsW(10);
+    PaddingOptions.paddingDown  = PageDesc.MillimetersToPixelsH(5);
+    PrintTest.PrinterSetPagePadding(PaddingOptions);
+
     ImGuiPrinter_Test Printer_Test;
     Printer_Test.Printer( PrintTest );
     
